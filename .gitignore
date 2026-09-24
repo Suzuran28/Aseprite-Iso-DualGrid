@@ -1,0 +1,12 @@
+dist/
+docs/
+.superpowers/
+assets/*.png
+!assets/preview-extruded-64-e16.png
+!assets/preview-top-64.png
+!assets/Banner.png
+!assets/Isometric_tiles.png
+!assets/Generate_template.png
+!assets/Preview.png
+scripts/*.lua
+tests/output/

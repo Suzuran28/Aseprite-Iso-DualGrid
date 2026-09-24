@@ -1,0 +1,10 @@
+return function(T, root)
+  T.test("extension manifest declares main.lua", function()
+    local path = app.fs.joinPath(root, "package.json")
+    local file = assert(io.open(path, "rb"), "package.json missing")
+    local body = file:read("*a")
+    file:close()
+    T.match(body, '"name"%s*:%s*"Aseprite%-Iso%-DualGrid"')
+    T.match(body, '"path"%s*:%s*"%./main%.lua"')
+  end)
+end

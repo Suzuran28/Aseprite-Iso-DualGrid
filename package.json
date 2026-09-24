@@ -1,0 +1,14 @@
+{
+  "name": "Aseprite-Iso-DualGrid",
+  "displayName": "Aseprite Isometric Dual Grid",
+  "description": "快速生成等视距双网格模板并提供预览",
+  "version": "1.0.0",
+  "author": { "name": "Suzuran28" },
+  "publisher": "Suzuran28",
+  "categories": ["Extension Packs"],
+  "contributes": {
+    "scripts": [
+      { "path": "./main.lua" }
+    ]
+  }
+}
