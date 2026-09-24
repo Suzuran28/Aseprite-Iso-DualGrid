@@ -15,7 +15,7 @@
 ![预览图](assets/preview-extruded-64-e16.png)
 
 ### 如何使用？
-- 从 [Release]() 中下载以`.aseprite-extension`结尾的文件
+- 从 [Release](https://github.com/Suzuran28/Aseprite-Iso-DualGrid/releases) 中下载以`.aseprite-extension`结尾的文件
 - 打开`Aseprite`，编辑 &rarr; 首选项 &rarr; 添加扩展 &rarr; 选择`Aseprite-Iso-DualGrid.aseprite-extension`文件 &rarr; 完成
 - 文件 &rarr; 生成等距双网格模板... 
 ![生成模板](assets/Generate_template.png)
