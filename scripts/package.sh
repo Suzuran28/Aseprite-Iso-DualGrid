@@ -36,6 +36,8 @@ allowlist=(
   main.lua
   assets/preview-top-64.png
   assets/preview-extruded-64-e16.png
+  assets/border.png
+  assets/heighthint.png
   src/atlas.lua
   src/bootstrap.lua
   src/dialog.lua
@@ -45,6 +47,8 @@ allowlist=(
   src/font.lua
   src/geometry.lua
   src/model.lua
+  src/placement.lua
+  src/placement_window.lua
   src/preview.lua
   src/preview_window.lua
   src/raster.lua

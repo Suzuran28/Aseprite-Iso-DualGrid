@@ -12,6 +12,8 @@ local suites = {
   "tests/document_test.lua",
   "tests/preview_test.lua",
   "tests/preview_window_test.lua",
+  "tests/placement_test.lua",
+  "tests/placement_window_test.lua",
   "tests/dialog_test.lua",
   "tests/export_test.lua"
 }

@@ -377,18 +377,16 @@ return function(load)
       focus=true, onclick=generateTemplate
     }
     dlg:button{id="cancel", text="取消", onclick=function() closeBoth() end}
-    -- The last opened window receives keyboard events; keep Tab in the controls.
+    -- Keep the preview modeless, then show the controls modally so the
+    -- editor cannot steal Tab focus while the generator is open.
     previewDlg:show{wait=false}
-    dlg:show{wait=false}
     local windowWidth, windowHeight
     if app.apiVersion >= 25 and app.window then
       windowWidth, windowHeight = app.window.width, app.window.height
     end
     controlsBounds, previewBounds = M.sideBySide(
       dlg.bounds,previewDlg.bounds,windowWidth,windowHeight)
-    dlg.bounds, previewDlg.bounds = controlsBounds, previewBounds
-    dlg:modify{id="size",focus=true}
-    dlg.bounds = controlsBounds
+    previewDlg.bounds = previewBounds
     if apiVersion >= 24 and appEvents then
       cancelListener = appEvents:on("beforecommand",function(ev)
         if ev.name == "Cancel" then
@@ -397,6 +395,7 @@ return function(load)
         end
       end)
     end
+    dlg:show{wait=true,bounds=controlsBounds}
     return dlg
   end
 

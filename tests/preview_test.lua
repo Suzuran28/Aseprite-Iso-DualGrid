@@ -105,7 +105,7 @@ return function(T, root, load)
 
   T.test("64px previews match the supplied reference PNGs pixel for pixel", function()
     local function matchesReference(actual, filename)
-      local expected = Image{fromFile=app.fs.joinPath(root,"docs","references",filename)}
+      local expected = Image{fromFile=app.fs.joinPath(root,"assets",filename)}
       T.equal(actual.width,expected.width)
       T.equal(actual.height,expected.height)
       for y = 0, actual.height - 1 do

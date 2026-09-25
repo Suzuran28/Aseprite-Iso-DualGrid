@@ -5,6 +5,8 @@ param(
 $expected = @(
   'assets/preview-extruded-64-e16.png',
   'assets/preview-top-64.png',
+  'assets/border.png',
+  'assets/heighthint.png',
   'main.lua',
   'package.json',
   'src/atlas.lua',
@@ -16,6 +18,8 @@ $expected = @(
   'src/font.lua',
   'src/geometry.lua',
   'src/model.lua',
+  'src/placement.lua',
+  'src/placement_window.lua',
   'src/preview.lua',
   'src/preview_window.lua',
   'src/raster.lua',

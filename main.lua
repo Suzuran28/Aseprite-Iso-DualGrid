@@ -8,6 +8,7 @@ local DialogUI = load("src/dialog.lua")
 local Export = load("src/export.lua")
 local Document = load("src/document.lua")
 local PreviewWindow = load("src/preview_window.lua")
+local PlacementWindow = load("src/placement_window.lua")
 
 function init(plugin)
   if not app.apiVersion or app.apiVersion < MIN_API then
@@ -41,6 +42,13 @@ function init(plugin)
     group="view_controls",
     onenabled=function() return Document.isTemplate(app.activeSprite) end,
     onclick=function() PreviewWindow.openActive() end
+  }
+  plugin:newCommand{
+    id="IsometricDualGridPlacementTest",
+    title="打开等距双网格铺设测试",
+    group="view_controls",
+    onenabled=function() return Document.isTemplate(app.activeSprite) end,
+    onclick=function() PlacementWindow.openActive() end
   }
 end
 

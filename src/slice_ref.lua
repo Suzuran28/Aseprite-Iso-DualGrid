@@ -1,8 +1,7 @@
 -- Slice-layer renderer. Bottom/Top keep the procedurally-generated 2px
--- diamond-ring grid; the SliceBorder / SliceBorderBottom / SliceHeightHint
--- pixels are applied verbatim from docs/references/isometric.aseprite via
--- slice_data.lua, so the generated Guides match the reference file at 64px
--- exactly instead of re-deriving seam geometry from polylines.
+-- diamond-ring grid; the SliceBorder and SliceHeightHint pixels come from
+-- assets/border.png and assets/heighthint.png via slice_data.lua. At 64px,
+-- E=16, center alignment, the generated layers match those atlases exactly.
 return function(load)
   local Atlas = load("src/atlas.lua")
   local Geometry = load("src/geometry.lua")
@@ -70,8 +69,8 @@ return function(load)
     end
   end
 
-  -- slice_data coordinates are authored for 64px, E=16, alignment=top
-  -- (topY=0). Scale them to the requested size and shift by topY/baseY.
+  -- Replacement atlas coordinates are authored for 64px, E=16, center
+  -- alignment (topY=16). Scale them before shifting to the requested topY.
   local function scaleCoord(v, n)
     return math.floor(v * n / 64 + 0.5)
   end
@@ -103,6 +102,7 @@ return function(load)
     local leftX = layout.translation.x
     local topY = cell.topY
     local baseY = cell.topY + config.elevation
+    local referenceShiftY = topY - scaleCoord(16,n)
     local outline = diamondOutline(n)
 
     -- Bottom/Top grid: 2px diamond ring on the floor and ceiling.
@@ -111,55 +111,33 @@ return function(load)
       emit("bottom", p.x + leftX, p.y + baseY)
     end
 
-    -- SliceBorder: the seam polyline on the top surface, verbatim from
-    -- the reference file (scaled to n). Drawn at every elevation — the
-    -- reference's top border is independent of wall height.
+    -- SliceBorder: replacement border pixels scaled from the 64px atlas.
+    -- This layer is independent of the requested wall height.
     local idx = variant.index
     local border = SliceData.border[idx] or {}
-    emitScaledPixels(emit,"sliceBorder",border,n,leftX,topY)
+    emitScaledPixels(emit,"sliceBorder",border,n,leftX,referenceShiftY)
 
     if config.elevation > 0 then
-      local borderBottom = SliceData.borderBottom[idx] or {}
       local E = config.elevation
 
-      -- SliceBorderBottom: the same polyline projected onto the floor.
-      -- At the reference resolution (64px, E=16) use the extracted pixels
-      -- directly; otherwise shift the top border down by E.
-      if n == 64 and E == 16 then
-        for _, p in ipairs(borderBottom) do
-          emit("sliceBorderBottom", p[1] + leftX, p[2] + topY)
-        end
-      else
-        emitScaledPixels(emit,"sliceBorderBottom",border,n,leftX,baseY)
-      end
+      -- SliceBorderBottom: project the replacement border onto the floor.
+      emitScaledPixels(emit,"sliceBorderBottom",border,n,
+        leftX,referenceShiftY+E)
 
       -- SliceHeightHint: vertical orange lines connecting the top border
-      -- down to the floor border. slice_data encodes the exact hint pixels
-      -- per mask at 64px/E=16; for other sizes/elevations we use separate
-      -- vertical runs (x, yTop, yBottom) and move each lower endpoint with E.
-      if n == 64 and E == 16 then
-        local hint = SliceData.hint[idx] or {}
-        for _, p in ipairs(hint) do
-          emit("sliceHeightHint", p[1] + leftX, p[2] + topY)
-        end
-      else
-        local hints = SliceData.hintColumns[idx] or {}
-        for _, c in ipairs(hints) do
-          local cx = scaleCoord(c[1], n)
-          local rightX = n > 64 and scaleCoord(c[1]+1,n)-1 or cx
-          local cyTop = scaleCoord(c[2], n)
-          local cyBottom = scaleCoord(c[3], n)
-          -- Keep the top endpoint fixed and move the lower endpoint by the
-          -- change in elevation. Scaling the whole span rounds a shortened
-          -- 15-pixel hint to eight pixels at E=8, leaving its last pixel one
-          -- row below the projected floor border.
-          local referenceElevation = scaleCoord(16, n)
-          local span = math.max(1,
-            cyBottom - cyTop + 1 + E - referenceElevation)
-          for h = 0, span - 1 do
-            for x = cx, rightX do
-              emit("sliceHeightHint", x + leftX, cyTop + h + topY)
-            end
+      -- down to the floor border. Every source column supplies its top
+      -- anchor; its lower endpoint moves with the actual elevation.
+      local hints = SliceData.hintColumns[idx] or {}
+      for _, c in ipairs(hints) do
+        local cx = scaleCoord(c[1], n)
+        local rightX = n > 64 and scaleCoord(c[1]+1,n)-1 or cx
+        local cyTop = scaleCoord(c[2], n) + referenceShiftY
+        local cyBottom = scaleCoord(c[3], n) + referenceShiftY
+        local referenceElevation = scaleCoord(16, n)
+        local endY = math.max(cyTop,cyBottom + E - referenceElevation)
+        for y = cyTop, endY do
+          for x = cx, rightX do
+            emit("sliceHeightHint", x + leftX, y)
           end
         end
       end

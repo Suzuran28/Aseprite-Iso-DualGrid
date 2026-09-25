@@ -220,6 +220,7 @@ return function(T, root, load)
     stretched.elevation = 32
     stretched.sizingMode = "stretch"
     short.layout, tall.layout, stretched.layout = "row", "row", "row"
+    short.alignment, tall.alignment, stretched.alignment = "top", "top", "top"
     local shortSprite = Document.create(short,Raster.atlas(short))
     local tallSprite = Document.create(tall,Raster.atlas(tall))
     local stretchedSprite = Document.create(stretched,Raster.atlas(stretched))

@@ -225,6 +225,7 @@ return function(T, root, load)
       function dlg:repaint() return self end
       function dlg:show(options)
         if options and options.bounds then self.bounds = options.bounds end
+        self.showOptions = options
         shown[#shown+1] = self
         return self
       end
@@ -241,8 +242,10 @@ return function(T, root, load)
       local preview = dialogs[2]
       T.equal(shown[1],preview)
       T.equal(shown[2],controls)
+      T.equal(preview.showOptions.wait,false)
+      T.equal(controls.showOptions.wait,true)
       T.truthy(controls.widgets.size.focus)
-      T.equal(controls.focusedId,"size")
+      T.equal(controls.showOptions.bounds.x,controls.bounds.x)
       T.equal(controls.order[1],"size")
       T.equal(controls.order[2],"elevation")
       T.equal(controls.order[3],"sizingMode")
