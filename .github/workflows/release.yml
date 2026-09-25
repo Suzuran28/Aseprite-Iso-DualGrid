@@ -1,0 +1,47 @@
+name: Package and release
+
+on:
+  push:
+    branches:
+      - '**'
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Package extension and publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          package_output="$(bash scripts/package.sh)"
+          printf '%s\n' "$package_output"
+          artifact="$(printf '%s\n' "$package_output" | sed -n 's/^PACKAGE=//p')"
+          version="$(python3 -c 'import json; print(json.load(open("package.json", encoding="utf-8"))["version"])')"
+
+          if [[ -z "$artifact" || ! -f "$artifact" || -z "$version" ]]; then
+            echo 'Package path or version is missing.' >&2
+            exit 1
+          fi
+
+          if gh release view "$version" >/dev/null 2>&1; then
+            gh release upload "$version" "$artifact" --clobber
+          else
+            gh release create "$version" "$artifact" \
+              --target "$GITHUB_SHA" \
+              --title "$version" \
+              --generate-notes
+          fi

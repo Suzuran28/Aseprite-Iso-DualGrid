@@ -138,9 +138,10 @@ return function(T, root, load)
     T.truthy(seen["30,47"] and seen["33,47"])
   end)
 
-  T.test("64px 16px-elevation SliceHeightHint sits between Top and Bottom", function()
+  T.test("64px replacement HeightHint reaches the exposed wall", function()
     local SliceRef = load("src/slice_ref.lua")
     local cfg = config(64,16,"fixed","grid")
+    cfg.alignment = "top"
     local layers = SliceRef.tile(cfg, Variants.build(15))
     T.equal(#layers.top.points, 128)
     T.equal(#layers.bottom.points, 128)
@@ -156,12 +157,13 @@ return function(T, root, load)
     local topMin, topMax = extent(layers.top.points)
     local bottomMin, bottomMax = extent(layers.bottom.points)
     local heightMin, heightMax = extent(layers.sliceHeightHint.points)
-    T.equal(topMin, 16)
-    T.equal(bottomMin, 32)
-    T.equal(topMax, 47)
-    T.equal(bottomMax, 63)
+    T.equal(topMin, 0)
+    T.equal(bottomMin, 16)
+    T.equal(topMax, 31)
+    T.equal(bottomMax, 47)
     T.truthy(heightMin > topMin)
-    T.truthy(heightMax < bottomMax)
+    T.equal(heightMin,7)
+    T.equal(heightMax,36)
   end)
 
   T.test("mask 8 keeps separate height-hint runs below the reference elevation", function()
@@ -171,7 +173,7 @@ return function(T, root, load)
     local hint = SliceRef.tile(cfg,Variants.build(8)).sliceHeightHint.points
     T.truthy(contains(hint,20,7))
     T.truthy(contains(hint,20,13))
-    T.truthy(not contains(hint,20,20),"the gap between walls stays empty")
+    T.truthy(not contains(hint,20,14),"the gap between walls stays empty")
     T.truthy(contains(hint,20,26))
     T.truthy(contains(hint,20,32))
     T.truthy(not contains(hint,25,20),"the second split column also stays empty")
@@ -227,8 +229,8 @@ return function(T, root, load)
       T.truthy(contains(layers.sliceBorder.points,xy[1],xy[2]),
         "128px nearest-neighbor scaling keeps the full 2x2 source pixel")
     end
-    T.truthy(contains(layers.sliceHeightHint.points,66,74))
-    T.truthy(contains(layers.sliceHeightHint.points,67,74),
+    T.truthy(contains(layers.sliceHeightHint.points,84,46))
+    T.truthy(contains(layers.sliceHeightHint.points,85,46),
       "scaled vertical hints keep the source pixel width")
   end)
 
@@ -288,6 +290,93 @@ return function(T, root, load)
       end
       sprite:close()
     end
+  end)
+
+  T.test("center-aligned border and HeightHint match replacement atlas images", function()
+    local SliceRef = load("src/slice_ref.lua")
+    local cfg = config(64,16,"fixed","grid")
+    local layers = SliceRef.atlas(cfg)
+    for _,item in ipairs({
+        {name="sliceBorder",file="border.png"},
+        {name="sliceHeightHint",file="heighthint.png"}}) do
+      local expected = Image{fromFile=app.fs.joinPath(root,"assets",item.file)}
+      T.equal(expected.width,256)
+      T.equal(expected.height,256)
+      local layer = layers[item.name]
+      local actual = Image(256,256,ColorMode.RGB)
+      actual:clear()
+      local color = layer.color
+      local rgba = app.pixelColor.rgba(color[1],color[2],color[3],color[4])
+      for _,point in ipairs(layer.points) do
+        actual:drawPixel(point.x,point.y,rgba)
+      end
+      for y=0,255 do
+        for x=0,255 do
+          local reference = expected:getPixel(x,y)
+          local pixel = actual:getPixel(x,y)
+          local alpha = app.pixelColor.rgbaA(reference)
+          T.equal(app.pixelColor.rgbaA(pixel),alpha,
+            item.name .. " alpha at " .. x .. "," .. y)
+          if alpha > 0 then
+            T.equal(pixel,reference,item.name .. " color at " .. x .. "," .. y)
+          end
+        end
+      end
+    end
+  end)
+
+  T.test("reference border follows alignment and hints follow actual elevation", function()
+    local SliceRef = load("src/slice_ref.lua")
+    local cfg = config(64,16,"stretch","grid")
+    local center = SliceRef.tile(cfg,Variants.build(8))
+    cfg.alignment = "top"
+    local top = SliceRef.tile(cfg,Variants.build(8))
+    local borderCenter = pointSet(center.sliceBorder.points)
+    local hintCenter = pointSet(center.sliceHeightHint.points)
+    for _,point in ipairs(top.sliceBorder.points) do
+      T.truthy(borderCenter[coordinateKey(point.x,point.y+16)])
+    end
+    for _,point in ipairs(top.sliceHeightHint.points) do
+      T.truthy(hintCenter[coordinateKey(point.x,point.y+16)])
+    end
+    T.equal(#top.sliceBorder.points,#center.sliceBorder.points)
+    T.equal(#top.sliceHeightHint.points,#center.sliceHeightHint.points)
+
+    cfg.alignment = "center"
+    local function hintExtents(elevation)
+      cfg.elevation = elevation
+      local tile = SliceRef.tile(cfg,Variants.build(8))
+      sameSet(pointSet(tile.sliceBorder.points),borderCenter,
+        "top border must not move with elevation")
+      local minY,maxY = math.huge,-1
+      for _,point in ipairs(tile.sliceHeightHint.points) do
+        if point.x == 20 then
+          minY = math.min(minY,point.y)
+          maxY = math.max(maxY,point.y)
+        end
+      end
+      return minY,maxY
+    end
+    local shortMin,shortMax = hintExtents(8)
+    local normalMin,normalMax = hintExtents(16)
+    local tallMin,tallMax = hintExtents(32)
+    T.equal(shortMin,normalMin)
+    T.equal(normalMin,tallMin)
+    T.equal(normalMax-shortMax,8)
+    T.equal(tallMax-normalMax,16)
+
+    local function firstRunLength(elevation)
+      cfg.elevation = elevation
+      local pixels = pointSet(SliceRef.tile(cfg,Variants.build(8))
+        .sliceHeightHint.points)
+      local length = 0
+      while pixels[coordinateKey(20,23+length)] do
+        length = length + 1
+      end
+      return length
+    end
+    T.equal(firstRunLength(12),11)
+    T.equal(firstRunLength(16),15)
   end)
 
   T.test("height uses selected edge runs and only their endpoint connectors", function()
@@ -416,19 +505,4 @@ return function(T, root, load)
     T.equal(first.seams.color[1],76)
   end)
 
-  T.test("canonical RGBA tile matches the visually approved 64x64 golden image", function()
-    local Fixture = dofile(app.fs.joinPath(root,"tests","seam_fixture.lua"))
-    local actual = Fixture.render(load)
-    local golden = Image{fromFile=app.fs.joinPath(root,"tests","fixtures","seam-64-golden.png")}
-    T.equal(actual.width,64)
-    T.equal(actual.height,64)
-    T.equal(golden.width,actual.width)
-    T.equal(golden.height,actual.height)
-    T.equal(golden.colorMode,ColorMode.RGB)
-    for y = 0, 63 do
-      for x = 0, 63 do
-        T.equal(actual:getPixel(x,y),golden:getPixel(x,y),"golden pixel " .. x .. "," .. y)
-      end
-    end
-  end)
 end

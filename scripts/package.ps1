@@ -10,10 +10,12 @@ $stage = Join-Path ([System.IO.Path]::GetTempPath()) (
   'isometric-dual-grid-' + [guid]::NewGuid().ToString('N'))
 $allowlist = @(
   'package.json','main.lua','assets/preview-top-64.png',
-  'assets/preview-extruded-64-e16.png','src/atlas.lua','src/bootstrap.lua',
+  'assets/preview-extruded-64-e16.png','assets/border.png',
+  'assets/heighthint.png','src/atlas.lua','src/bootstrap.lua',
   'src/dialog.lua','src/document.lua','src/errors.lua','src/export.lua',
-  'src/font.lua','src/geometry.lua','src/model.lua','src/preview.lua',
-  'src/preview_window.lua','src/raster.lua','src/seams.lua',
+  'src/font.lua','src/geometry.lua','src/model.lua','src/placement.lua',
+  'src/placement_window.lua','src/preview.lua','src/preview_window.lua',
+  'src/raster.lua','src/seams.lua',
   'src/slice_data.lua',
   'src/slice_ref.lua','src/variants.lua'
 )

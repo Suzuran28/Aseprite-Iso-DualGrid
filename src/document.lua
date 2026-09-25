@@ -6,11 +6,9 @@ return function(load)
   local M = {}
   local CONFIG_KEY = "isometric-dual-grid.config.v1"
 
-  -- The five Guide layers mirror the Slice group of the reference document
-  -- (docs/references/isometric.aseprite): a filled Bottom/Top slice pair,
-  -- black SliceBorder / dark SliceBorderBottom outlines, and orange
-  -- SliceHeightHint walls. They are genuine layered content, not one flat
-  -- composite, so users can toggle each guide on its own.
+  -- Bottom/Top follow the reference document's Slice group. Border and
+  -- HeightHint use the replacement atlases in assets/. All five Guides are
+  -- separate layers so users can toggle each one independently.
   local guideLayers = {
     {name="Bottom", slice="bottom", fallback="ground", always=true},
     {name="Top", slice="top", fallback="grid", always=true},
