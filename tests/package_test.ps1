@@ -1,12 +1,22 @@
 param(
-  [string]$Artifact = '.\dist\isometric-dual-grid-0.1.0.aseprite-extension'
+  [string]$Artifact
 )
+
+if ([string]::IsNullOrWhiteSpace($Artifact)) {
+  $manifest = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\package.json') |
+    ConvertFrom-Json
+  $Artifact = Join-Path $PSScriptRoot (
+    "..\dist\{0}-{1}.aseprite-extension" -f $manifest.name, $manifest.version)
+}
 
 $expected = @(
   'assets/preview-extruded-64-e16.png',
   'assets/preview-top-64.png',
   'assets/border.png',
   'assets/heighthint.png',
+  'assets/transparent_mask.png',
+  'assets/opaque_mask.png',
+  'assets/interlaced_mask.png',
   'main.lua',
   'package.json',
   'src/atlas.lua',
@@ -23,6 +33,8 @@ $expected = @(
   'src/preview.lua',
   'src/preview_window.lua',
   'src/raster.lua',
+  'src/side_copy.lua',
+  'src/side_copy_data.lua',
   'src/seams.lua',
   'src/slice_data.lua',
   'src/slice_ref.lua',

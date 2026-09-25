@@ -30,7 +30,7 @@ dist="$repo_root/dist"
 artifact="$dist/$name-$version.aseprite-extension"
 zip_path="$dist/$name-$version.zip"
 
-# Runtime files only: no tests/, docs/, scripts/, dist/, or .git/.
+# Runtime modules plus the three source masks in assets/.
 allowlist=(
   package.json
   main.lua
@@ -38,6 +38,11 @@ allowlist=(
   assets/preview-extruded-64-e16.png
   assets/border.png
   assets/heighthint.png
+  assets/transparent_mask.png
+  assets/opaque_mask.png
+  assets/interlaced_mask.png
+  src/side_copy.lua
+  src/side_copy_data.lua
   src/atlas.lua
   src/bootstrap.lua
   src/dialog.lua
