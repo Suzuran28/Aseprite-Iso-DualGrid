@@ -204,6 +204,17 @@ return function(T, root, load)
     sprite:close()
   end)
 
+  T.test("persists same-side mode and treats older templates as disabled", function()
+    local cfg = config()
+    cfg.sideCopy = "interlaced"
+    local sprite = Document.create(cfg,Raster.atlas(cfg))
+    T.equal(Document.loadConfig(sprite).sideCopy,"interlaced")
+    sprite.properties["isometric-dual-grid.config.v1"] =
+      "v1|64|16|fixed|grid|center|0|0"
+    T.equal(Document.loadConfig(sprite).sideCopy,"off")
+    sprite:close()
+  end)
+
   T.test("guide height hints scale with the requested elevation", function()
     local function bottomOpaque(image)
       local result = -1

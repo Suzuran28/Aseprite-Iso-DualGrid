@@ -7,7 +7,7 @@ return function(load)
     return {
       size=64, elevation=16, sizingMode="fixed",
       layout="grid", previewMode="extruded",
-      alignment="center", offsetX=0, offsetY=0
+      alignment="center", offsetX=0, offsetY=0, sideCopy="off"
     }
   end
 
@@ -44,6 +44,11 @@ return function(load)
     end
     if config.layout ~= "row" and config.layout ~= "grid" then
       return invalid("LAYOUT_INVALID")
+    end
+    local sideCopy = config.sideCopy or "off"
+    if sideCopy ~= "off" and sideCopy ~= "transparent"
+        and sideCopy ~= "opaque" and sideCopy ~= "interlaced" then
+      return invalid("SIDE_COPY_INVALID")
     end
     local alignment = config.alignment or "center"
     if alignment ~= "center" and alignment ~= "top" then

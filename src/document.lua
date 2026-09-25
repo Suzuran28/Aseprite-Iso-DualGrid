@@ -36,8 +36,9 @@ return function(load)
 
   function M.saveConfig(sprite, config)
     sprite.properties[CONFIG_KEY] = table.concat({
-      "v1", config.size, config.elevation, config.sizingMode, config.layout,
-      config.alignment or "center", config.offsetX or 0, config.offsetY or 0
+      "v2", config.size, config.elevation, config.sizingMode, config.layout,
+      config.alignment or "center", config.offsetX or 0, config.offsetY or 0,
+      config.sideCopy or "off"
     }, "|")
   end
 
@@ -47,11 +48,15 @@ return function(load)
     if type(raw) ~= "string" then return nil, "PREVIEW_CONFIG_INVALID" end
     local values = {}
     for value in raw:gmatch("[^|]+") do values[#values + 1] = value end
-    if #values ~= 8 or values[1] ~= "v1" then return nil, "PREVIEW_CONFIG_INVALID" end
+    if not ((#values == 8 and values[1] == "v1")
+        or (#values == 9 and values[1] == "v2")) then
+      return nil, "PREVIEW_CONFIG_INVALID"
+    end
     local config = {
       size=tonumber(values[2]), elevation=tonumber(values[3]),
       sizingMode=values[4], layout=values[5], alignment=values[6],
-      offsetX=tonumber(values[7]), offsetY=tonumber(values[8])
+      offsetX=tonumber(values[7]), offsetY=tonumber(values[8]),
+      sideCopy=values[9] or "off"
     }
     local validation = Model.validate(config)
     if not validation.ok then return nil, "PREVIEW_CONFIG_INVALID" end

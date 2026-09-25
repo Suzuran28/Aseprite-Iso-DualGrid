@@ -40,6 +40,16 @@ T.test("defaults provide the documented fixed grid configuration", function()
   T.equal(config.alignment, "center")
   T.equal(config.offsetX, 0)
   T.equal(config.offsetY, 0)
+  T.equal(config.sideCopy, "off")
+end)
+
+T.test("accepts only the four same-side copy modes", function()
+  for _, mode in ipairs({"off", "transparent", "opaque", "interlaced"}) do
+    local cfg = Model.withValue(Model.defaults(), "sideCopy", mode)
+    T.truthy(Model.validate(cfg).ok, mode)
+  end
+  invalid(Model.withValue(Model.defaults(), "sideCopy", "unknown"),
+    "SIDE_COPY_INVALID")
 end)
 
 T.test("withValue returns a copy without mutating its input", function()

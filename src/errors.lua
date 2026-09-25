@@ -1,4 +1,5 @@
 local messages = {
+  SIDE_COPY_INVALID="同面复制模式无效。",
   ALIGNMENT_INVALID="对齐方式必须为居中或顶部。",
   OFFSET_NOT_INTEGER="偏移量必须是整数。",
   SIZE_NOT_INTEGER="基础尺寸必须是整数。",

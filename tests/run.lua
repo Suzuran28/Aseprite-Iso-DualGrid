@@ -5,11 +5,13 @@ local B = dofile(app.fs.joinPath(testsDir, "bootstrap.lua"))
 local T = B.test("tests/harness.lua")
 local suites = {
   "tests/smoke_test.lua",
+  "tests/menu_test.lua",
   "tests/model_test.lua",
   "tests/geometry_test.lua",
   "tests/variants_test.lua",
   "tests/raster_test.lua",
   "tests/document_test.lua",
+  "tests/side_copy_test.lua",
   "tests/preview_test.lua",
   "tests/preview_window_test.lua",
   "tests/placement_test.lua",
