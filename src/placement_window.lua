@@ -17,11 +17,13 @@ return function(load)
     {value=1,mask=15,x=48,shortcut="2"}
   }
   local terrainKeys = {Digit1=0,Numpad1=0,Digit2=1,Numpad2=1}
+  local layerWidth,layerHeader,layerRow = 140,26,22
 
   function M.newState(sprite,config)
-    return {sprite=sprite,config=config,ground=Placement.new(),tool=nil,
-      terrain=1,
-      zoom=1,panX=0,panY=0,tiles=nil,dirty=true}
+    local stack=Placement.newStack()
+    return {sprite=sprite,config=config,stack=stack,
+      tool=nil,terrain=1,zoom=1,panX=0,panY=0,
+      tiles=nil,fadedTiles=nil,dirty=true}
   end
 
   function M.selectTool(state,tool)
@@ -54,6 +56,11 @@ return function(load)
       appEvents=overrides.appEvents or app.events,
       isTemplate=overrides.isTemplate or Document.isTemplate,
       loadConfig=overrides.loadConfig or Document.loadConfig,
+      confirmDelete=overrides.confirmDelete or function(layer)
+        return app.alert{title="删除图层",
+          text="确定删除“" .. layer.name .. "”？",
+          buttons={"删除","取消"}} == 1
+      end,
       makeTiles=overrides.makeTiles or sourceTiles
     }
   end
@@ -94,22 +101,51 @@ return function(load)
     local size,scale = state.config.size,state.zoom
     local baseTop = state.config.alignment == "top" and 0
       or math.floor(size/4)
-    for _,record in ipairs(Placement.tiles(state.ground)) do
-      local image = state.tiles[record.mask]
-      if image then
-        local cx,cy = Placement.screenCenter(record.x,record.y,
-          size,scale,originX,originY)
-        local x = math.floor(cx-size*scale/2+0.5)
-        local y = math.floor(cy-baseTop*scale+0.5)
-        local width = math.max(1,math.floor(image.width*scale+0.5))
-        local height = math.max(1,math.floor(image.height*scale+0.5))
-        if x < gc.width and y < gc.height and x+width > 0
-            and y+height > 0 then
-          gc:drawImage(image,Rectangle(0,0,image.width,image.height),
-            Rectangle(x,y,width,height))
+    for index,layer in ipairs(state.stack.layers) do
+      local images=state.stack.selected and state.stack.selected ~= index
+        and state.fadedTiles or state.tiles
+      for _,record in ipairs(Placement.tiles(layer.ground)) do
+        local image = images and images[record.mask]
+        if image then
+          local cx,cy = Placement.screenCenter(record.x,record.y,
+            size,scale,originX,originY)
+          local x = math.floor(cx-size*scale/2+0.5)
+          local y = math.floor(cy+Placement.layerOffset(index,
+            state.config.elevation,scale)
+            -baseTop*scale+0.5)
+          local width = math.max(1,math.floor(image.width*scale+0.5))
+          local height = math.max(1,math.floor(image.height*scale+0.5))
+          if x < gc.width and y < gc.height and x+width > 0
+              and y+height > 0 then
+            gc:drawImage(image,Rectangle(0,0,image.width,image.height),
+              Rectangle(x,y,width,height))
+          end
         end
       end
     end
+  end
+
+  local function fadeTiles(tiles)
+    local faded={}
+    for mask=0,15 do
+      local source=tiles[mask]
+      if source and source.pixels then
+        local image=Image(source)
+        for pixel in image:pixels() do
+          local color=pixel()
+          local alpha=app.pixelColor.rgbaA(color)
+          if alpha > 0 then
+            pixel(app.pixelColor.rgba(app.pixelColor.rgbaR(color),
+              app.pixelColor.rgbaG(color),app.pixelColor.rgbaB(color),
+              math.floor(alpha*0.3+0.5)))
+          end
+        end
+        faded[mask]=image
+      else
+        faded[mask]=source
+      end
+    end
+    return faded
   end
 
   local function drawRectanglePreview(gc,state,drag,originX,originY)
@@ -142,7 +178,9 @@ return function(load)
     local dlg,appListener,boundSprite,spriteListeners
     local closed,rendering=false,false
     local drag
-    local sceneWidth,sceneHeight,toolbarWidth=480,320,480
+    local sceneWidth,sceneHeight,toolbarWidth=480,320,620
+    local layerCanvasHeight,layerScroll,layerDrag=320,0,nil
+    local pointerTarget
 
     local function unbind()
       if boundSprite then
@@ -179,6 +217,8 @@ return function(load)
       boundSprite=nextSprite
       state=M.newState(nextSprite,nextConfig)
       drag=nil
+      layerScroll,layerDrag=0,nil
+      pointerTarget=nil
       if nextSprite then
         local names={"change"}
         if services.apiVersion >= 34 then
@@ -214,9 +254,15 @@ return function(load)
         rendering=true
         local ok,result=pcall(services.makeTiles,state.sprite,state.config)
         rendering=false
-        if ok then state.tiles=result else state.tiles=nil; print(result) end
+        if ok then
+          state.tiles=result
+          state.fadedTiles=fadeTiles(result)
+        else
+          state.tiles,state.fadedTiles=nil,nil
+          print(result)
+        end
       else
-        state.tiles=nil
+        state.tiles,state.fadedTiles=nil,nil
       end
       state.dirty=false
     end
@@ -249,9 +295,21 @@ return function(load)
     local function origin()
       return sceneWidth/2+state.panX,sceneHeight/2+state.panY
     end
-    local function pick(ev)
+    local function layerOrigin()
       local ox,oy=origin()
+      if state.stack.selected then
+        oy=oy+Placement.layerOffset(state.stack.selected,
+          state.config.elevation,state.zoom)
+      end
+      return ox,oy
+    end
+    local function pick(ev)
+      local ox,oy=layerOrigin()
       return Placement.pick(ev.x,ev.y,state.config.size,state.zoom,ox,oy)
+    end
+    local function selectedGround()
+      local index=state.stack.selected
+      return index and state.stack.layers[index].ground or nil
     end
     local function paintTerrain()
       if state.tool == "eraser" then return nil end
@@ -267,7 +325,7 @@ return function(load)
     end)
     activeWindow={dialog=dlg,release=release}
 
-    dlg:canvas{id="tools",width=480,height=36,autoscaling=true,
+    dlg:canvas{id="tools",width=620,height=36,autoscaling=true,
       onpaint=function(ev)
         local gc=ev.context
         toolbarWidth=gc.width
@@ -297,7 +355,7 @@ return function(load)
           gc:fillText(button.shortcut,button.x+27,22)
         end
         local total=#tools*toolWidth+(#tools-1)*toolGap
-        local left=math.floor((gc.width-total)/2)
+        local left=layerWidth+math.floor((gc.width-layerWidth-total)/2)
         for i,item in ipairs(tools) do
           local x=left+(i-1)*(toolWidth+toolGap)
           gc.color=state.tool == item.id
@@ -319,7 +377,7 @@ return function(load)
           end
         end
         local total=#tools*toolWidth+(#tools-1)*toolGap
-        local left=math.floor((toolbarWidth-total)/2)
+        local left=layerWidth+math.floor((toolbarWidth-layerWidth-total)/2)
         for i,item in ipairs(tools) do
           local x=left+(i-1)*(toolWidth+toolGap)
           if ev.x >= x and ev.x < x+toolWidth
@@ -332,7 +390,111 @@ return function(load)
       onkeydown=keydown
     }
     dlg:newrow{always=true}
-    dlg:canvas{id="scene",width=480,height=320,autoscaling=true,focus=true,
+    local function visibleLayerCount()
+      return math.max(1,math.floor((layerCanvasHeight-layerHeader)/layerRow))
+    end
+    local function layerAt(y)
+      if y < layerHeader then return nil end
+      local row=math.floor((y-layerHeader)/layerRow)
+      if row >= visibleLayerCount() then return nil end
+      local index=#state.stack.layers-layerScroll-row
+      if index < 1 then return nil end
+      return index
+    end
+    local layersSpec={
+      onpaint=function(ev)
+        local gc=ev.context
+        layerCanvasHeight=gc.height
+        local theme=app.theme.color
+        gc.color=theme.window_face
+        gc:fillRect(Rectangle(0,0,layerWidth,gc.height))
+        gc:drawThemeRect("button_normal",Rectangle(4,3,64,18))
+        gc:drawThemeRect("button_normal",Rectangle(72,3,64,18))
+        gc.color=theme.button_normal_text
+        gc:fillText("+ 新建",10,6)
+        gc.color=state.stack.selected and theme.button_normal_text
+          or theme.menuitem_disabled_text
+        gc:fillText("删选中",84,6)
+        for row=0,visibleLayerCount()-1 do
+          local index=#state.stack.layers-layerScroll-row
+          local layer=state.stack.layers[index]
+          if layer then
+            local y=layerHeader+row*layerRow
+            local selected=index == state.stack.selected
+            gc:drawThemeRect(selected and "timeline_clicked"
+              or "timeline_normal",Rectangle(1,y,layerWidth-2,layerRow))
+            gc:drawThemeImage("tiles",6,y+8)
+            gc.color=selected and theme.timeline_clicked_text
+              or theme.timeline_active_text
+            gc:fillText(layer.name,18,y+5)
+            if state.config then
+              local height=(index-1)*state.config.elevation
+              gc:fillText(height .. "px",79,y+5)
+            end
+            gc:drawThemeRect("button_normal",
+              Rectangle(116,y+2,20,18))
+            gc.color=theme.button_normal_text
+            gc:fillText("复",121,y+5)
+          end
+        end
+        gc.color=theme.timeline_padding
+        gc:fillRect(Rectangle(layerWidth-1,0,1,gc.height))
+      end,
+      onwheel=function(ev)
+        if not ev.deltaY or ev.deltaY == 0 then return end
+        local maximum=math.max(0,#state.stack.layers-visibleLayerCount())
+        layerScroll=math.max(0,math.min(maximum,
+          layerScroll+(ev.deltaY > 0 and 1 or -1)))
+        repaint()
+      end,
+      onmousedown=function(ev)
+        if ev.button ~= MouseButton.LEFT then return end
+        drag=nil
+        layerDrag=nil
+        if ev.y < layerHeader then
+          if ev.x >= 4 and ev.x < 68 then
+            Placement.addLayer(state.stack)
+            layerScroll=0
+          elseif ev.x >= 72 and ev.x < 136 and state.stack.selected then
+            local index=state.stack.selected
+            if services.confirmDelete(state.stack.layers[index]) then
+              Placement.deleteLayer(state.stack,index)
+              layerScroll=math.min(layerScroll,
+                math.max(0,#state.stack.layers-visibleLayerCount()))
+            end
+          end
+          repaint()
+          return
+        end
+        local index=layerAt(ev.y)
+        if not index then return end
+        if ev.x >= 114 then
+          Placement.copyLayer(state.stack,index)
+          layerScroll=0
+        else
+          layerDrag={index=index,y=ev.y}
+        end
+        repaint()
+      end,
+      onmousemove=function(ev)
+        if layerDrag and math.abs(ev.y-layerDrag.y) >= 5 then
+          layerDrag.moved=true
+        end
+      end,
+      onmouseup=function(ev)
+        if not layerDrag or ev.button ~= MouseButton.LEFT then return end
+        local target=layerAt(ev.y)
+        if layerDrag.moved and target then
+          Placement.moveLayer(state.stack,layerDrag.index,target)
+        elseif not layerDrag.moved then
+          Placement.selectLayer(state.stack,layerDrag.index)
+        end
+        layerDrag=nil
+        repaint()
+      end,
+      onkeydown=keydown
+    }
+    local sceneSpec={
       onpaint=function(ev)
         local gc=ev.context
         sceneWidth,sceneHeight=gc.width,gc.height
@@ -342,9 +504,10 @@ return function(load)
         if state.config then
           local ox,oy=origin()
           drawTiles(gc,state,ox,oy)
-          if state.tool then
-            drawGrid(gc,state,ox,oy)
-            drawRectanglePreview(gc,state,drag,ox,oy)
+          if state.tool and state.stack.selected then
+            local layerX,layerY=layerOrigin()
+            drawGrid(gc,state,layerX,layerY)
+            drawRectanglePreview(gc,state,drag,layerX,layerY)
           end
         else
           gc.color=Color{r=240,g=240,b=240,a=255}
@@ -369,12 +532,13 @@ return function(load)
             or ev.button == MouseButton.RIGHT))
             or (not state.tool and ev.button == MouseButton.RIGHT) then
           drag={mode="pan",button=ev.button,x=ev.x,y=ev.y}
-        elseif ev.button == MouseButton.LEFT and state.tool then
+        elseif ev.button == MouseButton.LEFT and state.tool
+            and selectedGround() then
           local x,y=pick(ev)
           drag={mode=state.tool == "rectangle" and "rectangle" or "paint",
             button=ev.button,x=x,y=y,toX=x,toY=y}
           if drag.mode == "paint" then
-            Placement.set(state.ground,x,y,paintTerrain())
+            Placement.set(selectedGround(),x,y,paintTerrain())
             repaint()
           end
         end
@@ -389,7 +553,7 @@ return function(load)
         elseif state.config then
           local x,y=pick(ev)
           if drag.mode == "paint" then
-            if Placement.line(state.ground,drag.toX,drag.toY,x,y,
+            if Placement.line(selectedGround(),drag.toX,drag.toY,x,y,
                 paintTerrain()) then
               repaint()
             end
@@ -403,11 +567,78 @@ return function(load)
         if not drag or ev.button ~= drag.button then return end
         if drag.mode == "rectangle" and state.config then
           local x,y=pick(ev)
-          Placement.rectangle(state.ground,drag.x,drag.y,x,y,
+          Placement.rectangle(selectedGround(),drag.x,drag.y,x,y,
             paintTerrain())
         end
         drag=nil
         repaint()
+      end,
+      onkeydown=keydown
+    }
+    local function shiftedContext(gc)
+      local shifted={width=math.max(1,gc.width-layerWidth),height=gc.height}
+      function shifted:fillRect(rect)
+        gc:fillRect(Rectangle(rect.x+layerWidth,rect.y,
+          rect.width,rect.height))
+      end
+      function shifted:fillText(value,x,y)
+        gc:fillText(value,x+layerWidth,y)
+      end
+      function shifted:drawImage(image,source,destination)
+        gc:drawImage(image,source,Rectangle(destination.x+layerWidth,
+          destination.y,destination.width,destination.height))
+      end
+      function shifted:beginPath() gc:beginPath() end
+      function shifted:moveTo(x,y) gc:moveTo(x+layerWidth,y) end
+      function shifted:lineTo(x,y) gc:lineTo(x+layerWidth,y) end
+      function shifted:closePath() gc:closePath() end
+      function shifted:stroke() gc:stroke() end
+      return setmetatable(shifted,{
+        __index=function(_,key) return gc[key] end,
+        __newindex=function(_,key,value) gc[key]=value end
+      })
+    end
+    local function sceneEvent(ev)
+      return setmetatable({x=ev.x and ev.x-layerWidth or nil},{
+        __index=function(_,key) return ev[key] end
+      })
+    end
+    dlg:canvas{id="workspace",width=620,height=320,
+      autoscaling=true,focus=true,
+      onpaint=function(ev)
+        sceneSpec.onpaint{context=shiftedContext(ev.context)}
+        layersSpec.onpaint(ev)
+      end,
+      onmousedown=function(ev)
+        if ev.x < layerWidth then
+          pointerTarget="layers"
+          layersSpec.onmousedown(ev)
+        else
+          pointerTarget="scene"
+          sceneSpec.onmousedown(sceneEvent(ev))
+        end
+      end,
+      onmousemove=function(ev)
+        if pointerTarget == "layers" then
+          layersSpec.onmousemove(ev)
+        elseif pointerTarget == "scene" then
+          sceneSpec.onmousemove(sceneEvent(ev))
+        end
+      end,
+      onmouseup=function(ev)
+        if pointerTarget == "layers" then
+          layersSpec.onmouseup(ev)
+        elseif pointerTarget == "scene" then
+          sceneSpec.onmouseup(sceneEvent(ev))
+        end
+        pointerTarget=nil
+      end,
+      onwheel=function(ev)
+        if ev.x and ev.x < layerWidth then
+          layersSpec.onwheel(ev)
+        else
+          sceneSpec.onwheel(sceneEvent(ev))
+        end
       end,
       onkeydown=keydown
     }

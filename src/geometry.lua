@@ -9,12 +9,12 @@ end
 function M.layout(config)
   local n = config.size
   local elevation = config.elevation
-  local diamondHeight = n / 2
+  local diamondHeight = math.floor(n / 2)
   local alignment = value(config, "alignment", "center")
   local offsetX = value(config, "offsetX", 0)
   local offsetY = value(config, "offsetY", 0)
   local top = (alignment == "top" and 0 or math.floor(n / 4)) + offsetY
-  local baseHeight = config.sizingMode == "stretch" and n + elevation or n
+  local baseHeight = n
   local fixed = config.sizingMode == "fixed"
   local content = {
     minX=offsetX, maxX=offsetX + n,

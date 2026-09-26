@@ -25,6 +25,69 @@ return function(load)
     return {rows={},count=0}
   end
 
+  function M.newStack()
+    return {layers={{name="层 1",ground=M.new()}},selected=1,nextId=2}
+  end
+
+  function M.addLayer(stack)
+    local layer={name="层 " .. stack.nextId,ground=M.new()}
+    stack.nextId=stack.nextId+1
+    stack.layers[#stack.layers+1]=layer
+    stack.selected=#stack.layers
+    return layer
+  end
+
+  function M.copyLayer(stack,index)
+    local source=assert(stack.layers[index])
+    local layer={name="层 " .. stack.nextId .. " 副本",ground=M.new()}
+    stack.nextId=stack.nextId+1
+    for y,row in pairs(source.ground.rows) do
+      for x,terrain in pairs(row) do M.set(layer.ground,x,y,terrain) end
+    end
+    table.insert(stack.layers,index+1,layer)
+    stack.selected=index+1
+    return layer
+  end
+
+  function M.deleteLayer(stack,index)
+    assert(stack.layers[index])
+    table.remove(stack.layers,index)
+    if #stack.layers == 0 then
+      stack.selected=nil
+    elseif stack.selected == index then
+      stack.selected=math.min(index,#stack.layers)
+    elseif stack.selected and stack.selected > index then
+      stack.selected=stack.selected-1
+    end
+  end
+
+  function M.moveLayer(stack,from,to)
+    assert(stack.layers[from] and stack.layers[to])
+    if from == to then return end
+    local selected=stack.selected and stack.layers[stack.selected]
+    local layer=table.remove(stack.layers,from)
+    table.insert(stack.layers,to,layer)
+    stack.selected=nil
+    if selected then
+      for index,item in ipairs(stack.layers) do
+        if item == selected then stack.selected=index; break end
+      end
+    end
+  end
+
+  function M.selectLayer(stack,index)
+    assert(stack.layers[index])
+    if stack.selected == index then
+      stack.selected=nil
+    else
+      stack.selected=index
+    end
+  end
+
+  function M.layerOffset(index,elevation,scale)
+    return -(index-1)*elevation*scale
+  end
+
   function M.get(state,x,y)
     local row=state.rows[y]
     return row and row[x] or nil

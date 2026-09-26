@@ -24,10 +24,10 @@ T.test("valid fixed and stretch formulas", function()
 
   local stretchResult = Model.validate(stretch)
   T.truthy(stretchResult.ok)
-  T.equal(stretchResult.cell.height, 64)
+  T.equal(stretchResult.cell.height, 56)
   T.equal(stretchResult.cell.topY, 8)
   T.equal(stretchResult.sheet.width, 128)
-  T.equal(stretchResult.sheet.height, 256)
+  T.equal(stretchResult.sheet.height, 224)
 end)
 
 T.test("defaults provide the documented fixed grid configuration", function()
@@ -142,13 +142,13 @@ T.test("rejects invalid layout", function()
 end)
 
 T.test("accepts atlas side boundary", function()
-  local result = Model.validate({ size=16, elevation=4080, sizingMode="stretch", layout="grid" })
+  local result = Model.validate({ size=16, elevation=4084, sizingMode="stretch", layout="grid" })
   T.truthy(result.ok)
   T.equal(result.sheet.height, 16384)
 end)
 
 T.test("rejects the first atlas side overflow", function()
-  invalid({ size=16, elevation=4081, sizingMode="stretch", layout="grid" }, "ATLAS_SIDE_LIMIT")
+  invalid({ size=16, elevation=4085, sizingMode="stretch", layout="grid" }, "ATLAS_SIDE_LIMIT")
 end)
 
 T.test("accepts atlas pixel boundary", function()
@@ -158,6 +158,6 @@ T.test("accepts atlas pixel boundary", function()
 end)
 
 T.test("rejects the first atlas pixel overflow below the side cap", function()
-  invalid({ size=1024, elevation=1, sizingMode="stretch", layout="grid" }, "ATLAS_PIXEL_LIMIT")
+  invalid({ size=1024, elevation=257, sizingMode="stretch", layout="grid" }, "ATLAS_PIXEL_LIMIT")
 end)
 end

@@ -48,7 +48,7 @@ return function(T, root, load)
     state = DialogUI.reduce(state, {type="SET_ELEVATION", value=32})
     state = DialogUI.reduce(state, {type="SET_SIZING_MODE", value="stretch"})
     T.truthy(state.validation.ok)
-    T.equal(state.cellSummary, "32×64")
+    T.equal(state.cellSummary, "32×56")
     T.equal(state.generateEnabled, true)
   end)
 
@@ -354,7 +354,8 @@ return function(T, root, load)
       popupOpen = false
       T.truthy(timer and timer.isRunning)
       timer:fire()
-      T.match(dialogs[2].modified.atlasStatus.text,"320")
+      T.match(dialogs[2].modified.atlasStatus.text,"高 256 px")
+      T.match(dialogs[2].modified.cellStatus.text,"高 64 px")
       local modifications = controls.modifyCount or 0
       controls.data.offsetX = nil
       controls.widgets.offsetX.onchange()

@@ -3,9 +3,36 @@ return function(T, root, load)
   local Model = load("src/model.lua")
   local Placement = load("src/placement.lua")
 
+  local function registerCanvas(dlg,spec)
+    dlg.widgets[spec.id]=spec
+    dlg.canvasIds=dlg.canvasIds or {}
+    dlg.canvasIds[#dlg.canvasIds+1]=spec.id
+    if spec.id ~= "workspace" then return end
+    local function sceneEvent(handler,ev)
+      local shifted={}
+      for key,value in pairs(ev) do shifted[key]=value end
+      if ev.x then shifted.x=ev.x+140 end
+      return handler(shifted)
+    end
+    dlg.widgets.scene={onkeydown=spec.onkeydown}
+    for _,name in ipairs({"onmousedown","onmousemove","onmouseup","onwheel"}) do
+      dlg.widgets.scene[name]=function(ev)
+        return sceneEvent(spec[name],ev)
+      end
+    end
+    dlg.widgets.scene.onpaint=function(ev)
+      ev.context.width=620
+      return spec.onpaint(ev)
+    end
+    dlg.widgets.layers={onkeydown=spec.onkeydown,onpaint=spec.onpaint}
+    for _,name in ipairs({"onmousedown","onmousemove","onmouseup","onwheel"}) do
+      dlg.widgets.layers[name]=spec[name]
+    end
+  end
+
   T.test("placement window starts empty and tool selection toggles", function()
     local first = Window.newState({},Model.defaults())
-    T.equal(Placement.count(first.ground),0)
+    T.equal(Placement.count(first.stack.layers[1].ground),0)
     T.equal(first.tool,nil)
     T.equal(first.terrain,1)
     Window.selectTerrain(first,0)
@@ -17,7 +44,7 @@ return function(T, root, load)
     Window.selectTool(first,"brush")
     T.equal(first.tool,nil)
     local second = Window.newState({},Model.defaults())
-    T.equal(Placement.count(second.ground),0)
+    T.equal(Placement.count(second.stack.layers[1].ground),0)
   end)
 
   T.test("placement interaction paints rectangles erases and pans by mode", function()
@@ -43,8 +70,12 @@ return function(T, root, load)
     end
     Dialog = function(options)
       local dlg={options=options,widgets={},draws={},closed=false}
-      function dlg:canvas(spec) self.widgets[spec.id]=spec; return self end
-      function dlg:newrow() return self end
+      function dlg:canvas(spec) registerCanvas(self,spec); return self end
+      function dlg:newrow(options)
+        self.rows=self.rows or {}
+        self.rows[#self.rows+1]=options
+        return self
+      end
       function dlg:modify() return self end
       function dlg:show(options) self.showOptions=options; return self end
       function dlg:repaint() self.repaintCount=(self.repaintCount or 0)+1 end
@@ -53,11 +84,20 @@ return function(T, root, load)
         if self.options.onclose then self.options.onclose() end
       end
       function dlg:paint()
-        local gc={width=480,height=320,strokes=0}
+        local gc={width=620,height=320,strokes=0,labels={},rects={},
+          themeParts={},themeImages={}}
         self.paths={}
-        function gc:fillRect() end
+        function gc:fillRect(rect)
+          self.rects[#self.rects+1]=rect
+        end
         function gc:strokeRect() end
-        function gc:fillText() end
+        function gc:fillText(value) self.labels[value]=true end
+        function gc:drawThemeRect(part,rect)
+          self.themeParts[part]=rect
+        end
+        function gc:drawThemeImage(part)
+          self.themeImages[part]=true
+        end
         function gc:drawImage(image,source,destination)
           dlg.draws[#dlg.draws+1]={mask=image.mask,x=destination.x,
             y=destination.y,width=destination.width}
@@ -69,7 +109,7 @@ return function(T, root, load)
         function gc:lineTo() end
         function gc:closePath() end
         function gc:stroke() self.strokes=self.strokes+1 end
-        self.widgets.scene.onpaint{context=gc}
+        self.widgets.workspace.onpaint{context=gc}
         return gc
       end
       windows[#windows+1]=dlg
@@ -78,10 +118,13 @@ return function(T, root, load)
     local sprite={events=bus()}
     local appEvents=bus()
     local cfg=Model.defaults()
+    cfg.elevation=12
+    local allowDelete=false
     local services={apiVersion=21,appEvents=appEvents,
       getActive=function() return sprite end,
       isTemplate=function(value) return value == sprite end,
       loadConfig=function() return cfg end,
+      confirmDelete=function() return allowDelete end,
       makeTiles=function()
         local result={}
         for mask=0,15 do result[mask]={mask=mask,width=64,height=64} end
@@ -90,7 +133,19 @@ return function(T, root, load)
     local ok,err=xpcall(function()
       local first=Window.open(sprite,cfg,services)
       local scene=first.widgets.scene
-      T.equal(first:paint().strokes,0)
+      local initialPaint=first:paint()
+      T.equal(initialPaint.strokes,0)
+      T.equal(initialPaint.rects[1].x,140)
+      T.equal(initialPaint.rects[1].width,480)
+      T.equal(initialPaint.rects[2].x,0)
+      T.equal(initialPaint.rects[2].width,140,
+        "sidebar background cannot cover the scene")
+      T.truthy(initialPaint.themeParts.timeline_clicked,
+        "selected row uses the native timeline skin")
+      T.equal(initialPaint.themeParts.timeline_clicked.height,22,
+        "selected row uses the compact native timeline skin")
+      T.truthy(initialPaint.themeImages.tiles,
+        "layer row uses the theme's tile icon")
       scene.onkeydown{code="KeyB",stopPropagation=function() end}
       T.truthy(first:paint().strokes>0)
       scene.onmousedown{button=MouseButton.LEFT,x=240,y=160}
@@ -135,7 +190,7 @@ return function(T, root, load)
       first.draws={}
       first:paint()
       T.equal(first.draws[#first.draws].x,noToolX+10)
-      first.widgets.tools.onmousedown{button=MouseButton.LEFT,x=120,y=10}
+      first.widgets.tools.onmousedown{button=MouseButton.LEFT,x=240,y=10}
       T.truthy(first:paint().strokes>0)
       local guideX,guideY=first.paths[1].x,first.paths[1].y
       cfg.offsetX,cfg.offsetY=17,-4
@@ -150,6 +205,9 @@ return function(T, root, load)
       T.truthy(first.draws[#first.draws].width>beforeZoom)
       local second=Window.open(sprite,cfg,services)
       T.truthy(first.closed)
+      T.equal(#second.canvasIds,2,"toolbar and workspace are the only canvases")
+      T.equal(second.widgets.workspace.width,620,
+        "sidebar and scene share one horizontal canvas")
       second:paint()
       T.equal(#second.draws,0)
       T.equal(second.showOptions.wait,false)
@@ -195,6 +253,45 @@ return function(T, root, load)
       function digit0:stopPropagation() self.stopped=true end
       secondScene.onkeydown(digit0)
       T.equal(digit0.stopped,false)
+      local layers=second.widgets.layers
+      T.truthy(layers,"layer controls appear beside the scene")
+      layers.onmousedown{button=MouseButton.LEFT,x=10,y=45}
+      layers.onmouseup{button=MouseButton.LEFT,x=10,y=45}
+      secondScene.onmousedown{button=MouseButton.LEFT,x=240,y=160}
+      secondScene.onmouseup{button=MouseButton.LEFT,x=240,y=160}
+      second.draws={}
+      second:paint()
+      T.equal(#second.draws,4,"painting needs a selected layer")
+      layers.onmousedown{button=MouseButton.LEFT,x=10,y=45}
+      layers.onmouseup{button=MouseButton.LEFT,x=10,y=45}
+      layers.onmousedown{button=MouseButton.LEFT,x=10,y=10}
+      T.truthy(second:paint().labels["12px"])
+      second.widgets.tools.onmousedown{button=MouseButton.LEFT,x=18,y=16}
+      secondScene.onmousedown{button=MouseButton.LEFT,x=240,y=148}
+      secondScene.onmouseup{button=MouseButton.LEFT,x=240,y=148}
+      second.draws={}
+      second:paint()
+      T.equal(#second.draws,8)
+      T.equal(second.draws[5].y,second.draws[1].y-12)
+      layers.onmousedown{button=MouseButton.LEFT,x=125,y=45}
+      second.draws={}
+      second:paint()
+      T.equal(#second.draws,12,"copy adds a separate visible layer")
+      layers.onmousedown{button=MouseButton.LEFT,x=100,y=10}
+      second.draws={}
+      second:paint()
+      T.equal(#second.draws,12,"cancelled deletion keeps the layer")
+      allowDelete=true
+      layers.onmousedown{button=MouseButton.LEFT,x=100,y=10}
+      second.draws={}
+      second:paint()
+      T.equal(#second.draws,8,"delete removes copied layer")
+      layers.onmousedown{button=MouseButton.LEFT,x=10,y=45}
+      layers.onmousemove{button=MouseButton.LEFT,x=10,y=55}
+      layers.onmouseup{button=MouseButton.LEFT,x=10,y=55}
+      second.draws={}
+      second:paint()
+      T.equal(second.draws[1].mask,0,"drag reorders layer artwork")
       second:close()
       T.truthy(sprite.events.offCount>0)
       T.truthy(appEvents.offCount>0)
@@ -226,7 +323,7 @@ return function(T, root, load)
     local dlg
     Dialog=function(options)
       dlg={options=options,widgets={},images={}}
-      function dlg:canvas(spec) self.widgets[spec.id]=spec; return self end
+      function dlg:canvas(spec) registerCanvas(self,spec); return self end
       function dlg:newrow() return self end
       function dlg:show() return self end
       function dlg:repaint() end
@@ -239,12 +336,15 @@ return function(T, root, load)
     function appEvents:off() end
     local ok,err=xpcall(function()
       Window.open(sprite,cfg,{apiVersion=21,appEvents=appEvents,
+        confirmDelete=function() return true end,
         getActive=function() return sprite end})
       dlg.widgets.scene.onkeydown{code="KeyB"}
       dlg.widgets.scene.onmousedown{button=MouseButton.LEFT,x=240,y=160}
       local gc={width=480,height=320}
       function gc:fillRect() end
       function gc:fillText() end
+      function gc:drawThemeRect() end
+      function gc:drawThemeImage() end
       function gc:beginPath() end
       function gc:moveTo() end
       function gc:lineTo() end
@@ -256,7 +356,7 @@ return function(T, root, load)
       T.equal(#dlg.images,4)
       local topOnly
       for _,draw in ipairs(dlg.images) do
-        if draw.rect.x == 208 and draw.rect.y == 144 then
+        if draw.rect.x == 348 and draw.rect.y == 144 then
           topOnly=draw.image
         else
           T.equal(app.pixelColor.rgbaA(draw.image:getPixel(32,16)),0)
@@ -264,6 +364,44 @@ return function(T, root, load)
       end
       T.truthy(topOnly)
       T.equal(topOnly:getPixel(32,16),green)
+      local layers=dlg.widgets.layers
+      layers.onmousedown{button=MouseButton.LEFT,x=10,y=10}
+      dlg.images={}
+      dlg.widgets.scene.onpaint{context=gc}
+      local fadedTop
+      for _,draw in ipairs(dlg.images) do
+        if draw.rect.x == 348 and draw.rect.y == 144 then
+          fadedTop=draw.image
+        end
+      end
+      T.truthy(fadedTop)
+      T.equal(app.pixelColor.rgbaA(fadedTop:getPixel(32,16)),77,
+        "unselected artwork uses 30 percent opacity")
+      layers.onmousedown{button=MouseButton.LEFT,x=10,y=45}
+      layers.onmouseup{button=MouseButton.LEFT,x=10,y=45}
+      dlg.images={}
+      dlg.widgets.scene.onpaint{context=gc}
+      for _,draw in ipairs(dlg.images) do
+        if draw.rect.x == 348 and draw.rect.y == 144 then
+          T.equal(app.pixelColor.rgbaA(draw.image:getPixel(32,16)),255,
+            "clearing selection restores all artwork opacity")
+        end
+      end
+      layers.onmousedown{button=MouseButton.LEFT,x=10,y=45}
+      layers.onmouseup{button=MouseButton.LEFT,x=10,y=45}
+      dlg.widgets.scene.onmousedown{button=MouseButton.LEFT,x=240,y=144}
+      dlg.widgets.scene.onmouseup{button=MouseButton.LEFT,x=240,y=144}
+      dlg.images={}
+      dlg.widgets.scene.onpaint{context=gc}
+      T.equal(#dlg.images,8)
+      local raised=false
+      for _,draw in ipairs(dlg.images) do
+        if draw.rect.x == 348 and draw.rect.y == 128 then
+          raised=true
+        end
+      end
+      T.truthy(raised,"upper layer uses the configured elevation")
+      layers.onmousedown{button=MouseButton.LEFT,x=100,y=10}
       local bar={width=480,height=36}
       dlg.terrainButtons={}
       bar.labels={}

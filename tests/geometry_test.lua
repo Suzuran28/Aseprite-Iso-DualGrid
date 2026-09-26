@@ -1,6 +1,7 @@
 return function(T, root, load)
   local Geometry = load("src/geometry.lua")
   local Model = load("src/model.lua")
+  local Atlas = load("src/atlas.lua")
 
   local function config(alignment, offsetX, offsetY)
     return {
@@ -39,7 +40,7 @@ return function(T, root, load)
     negative.sizingMode = "stretch"
     local left = Geometry.layout(negative)
     T.equal(left.cell.width,71)
-    T.equal(left.cell.height,89)
+    T.equal(left.cell.height,73)
     T.equal(left.translation.x,0)
     T.equal(left.translation.y,0)
     local positive = config("center",7,30)
@@ -49,6 +50,23 @@ return function(T, root, load)
     T.equal(right.cell.height,94)
     T.equal(right.translation.x,7)
     T.equal(right.translation.y,46)
+  end)
+
+  T.test("stretch extends only when the vertical content exceeds a cell", function()
+    local center=config("center",0,0)
+    center.sizingMode="stretch"
+    center.layout="grid"
+    T.equal(Geometry.layout(center).cell.height,64)
+    T.equal(Atlas.sheet(center).height,256)
+    center.elevation=17
+    T.equal(Geometry.layout(center).cell.height,65)
+    T.equal(Atlas.sheet(center).height,260)
+    local top=config("top",0,0)
+    top.sizingMode="stretch"
+    top.elevation=32
+    T.equal(Geometry.layout(top).cell.height,64)
+    top.elevation=33
+    T.equal(Geometry.layout(top).cell.height,65)
   end)
 
   T.test("validation rejects fractional offsets and unknown alignment", function()
